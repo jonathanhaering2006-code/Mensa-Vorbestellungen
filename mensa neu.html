@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mensa Speiseplan & Vorbestellung</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #27ae60;
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+            --text: #333333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .user-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #eef2f5;
+            border-radius: 8px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .form-group input {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        .day-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .day-header {
+            background-color: var(--primary);
+            color: white;
+            padding: 12px 20px;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+
+        .meal-options {
+            padding: 15px;
+        }
+
+        .meal-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .meal-item:last-child {
+            border-bottom: none;
+        }
+
+        .meal-item:hover {
+            background-color: #f9f9f9;
+        }
+
+        .meal-item input[type="radio"] {
+            margin-right: 15px;
+            transform: scale(1.2);
+        }
+
+        .meal-details {
+            flex-grow: 1;
+        }
+
+        .meal-title {
+            font-weight: 600;
+        }
+
+        .meal-desc {
+            font-size: 0.85em;
+            color: #777;
+        }
+
+        .meal-price {
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .total-price {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #219150;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #status-message {
+            margin-top: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        @media (max-width: 600px) {
+            .user-info {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Mensa Speiseplan</h1>
+    <p class="subtitle">Wähle deine Gerichte für die Woche und bestelle direkt vor.</p>
+
+    <form id="orderForm">
+        <!-- Benutzerdaten -->
+        <div class="user-info">
+            <div class="form-group">
+                <label for="userName">Vollständiger Name *</label>
+                <input type="text" id="userName" required placeholder="z. B. Max Mustermann">
+            </div>
+            <div class="form-group">
+                <label for="userEmail">E-Mail-Adresse *</label>
+                <input type="email" id="userEmail" required placeholder="max@beispiel.de">
+            </div>
+        </div>
+
+        <!-- Dynamische Tage & Menüs -->
+        <div id="menuContainer"></div>
+
+        <!-- Zusammenfassung & Senden -->
+        <div class="summary">
+            <div>
+                <span>Gesamtpreis: </span>
+                <span class="total-price" id="totalPrice">0,00 €</span>
+            </div>
+            <button type="submit" id="submitBtn">Kostenpflichtig vorbestellen</button>
+        </div>
+        <div id="status-message"></div>
+    </form>
+</div>
+
+<script>
+    // 1. Speiseplan-Daten (Hier kannst du den Wochenplan anpassen)
+    const speiseplan = [
+        {
+            tag: "Montag",
+            datum: "Mo, 12. Okt",
+            angebote: [
+                { id: "mo_1", name: "Menü 1: Spaghetti Bolognese", desc: "Rindfleischsaucen-Klassiker mit Hartkäse", preis: 4.50 },
+                { id: "mo_2", name: "Menü 2: Gemüsegulasch (Veggie)", desc: "Mit Kartoffeln und Paprika", preis: 4.00 },
+                { id: "mo_none", name: "Kein Essen", desc: "Ich benötige montags kein Essen", preis: 0.00 }
+            ]
+        },
+        {
+            tag: "Dienstag",
+            datum: "Di, 13. Okt",
+            angebote: [
+                { id: "di_1", name: "Menü 1: Hähnchenbrust im Knuspermantel", desc: "Mit Pommes frites und Beilagensalat", preis: 5.20 },
+                { id: "di_2", name: "Menü 2: Spinat-Linsen-Curry (Vegan)", desc: "Mit Basmatireis", preis: 4.20 },
+                { id: "di_none", name: "Kein Essen", desc: "Ich benötige dienstags kein Essen", preis: 0.00 }
+            ]
+        },
+        {
+            tag: "Mittwoch",
+            datum: "Mi, 14. Okt",
+            angebote: [
+                { id: "mi_1", name: "Menü 1: Schweineschnitzel 'Wiener Art'", desc: "Mit Bratkartoffeln", preis: 5.00 },
+                { id: "mi_2", name: "Menü 2: Käsespätzle mit Röstzwiebeln", desc: "Frischer Beilagensalat", preis: 4.50 },
+                { id: "mi_none", name: "Kein Essen", desc: "Ich benötige mittwochs kein Essen", preis: 0.00 }
+            ]
+        }, { tag: "Donnerstag", datum: "Do, 15. Okt", angebote: [ { id: "do_1", name: "Menü 1: Lasagne al Forno", desc: "Mit Schichten aus Hackfleisch und Béchamel", preis: 5.00 }, { id: "do_2", name: "Menü 2: Falafel-Bowl (Vegan)", desc: "Mit Couscous, Hummus und frischem Gemüse", preis: 4.50 }, { id: "do_none", name: "Kein Essen", desc: "Ich benötige donnerstags kein Essen", preis: 0.00 } ] }, { tag: "Freitag", datum: "Fr, 16. Okt", angebote: [ { id: "fr_1", name: "Menü 1: Knuspriges Fischfilet", desc: "Mit Kartoffelsalat und Remoulade", preis: 5.50 }, { id: "fr_2", name: "Menü 2: Gemüsemaydani / Pilz-Risotto", desc: "Frischer Parmesan und Kräuter", preis: 4.20 }, { id: "fr_none", name: "Kein Essen", desc: "Ich benötige freitags kein Essen", preis: 0.00 } ] }
+
+    ];
+
+    // **WICHTIG**: Ersetze diese URL mit deiner Google Apps Script Web-App URL!
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCFaq_Zriw_ulkfDvFFXA9-qNBFgUJrjGfl2itrSkCRS_Z3DYT0osPlohFzsyh1D1QIg/exec";
+
+    // 2. DOM-Elemente
+    const menuContainer = document.getElementById('menuContainer');
+    const totalPriceEl = document.getElementById('totalPrice');
+    const orderForm = document.getElementById('orderForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusMessage = document.getElementById('status-message');
+
+    // 3. Speiseplan rendern
+    function renderMenu() {
+        speiseplan.forEach((tagData, dayIndex) => {
+            const dayCard = document.createElement('div');
+            dayCard.className = 'day-card';
+
+            let optionsHTML = '';
+            tagData.angebote.forEach((angebot, optionIndex) => {
+                const isChecked = optionIndex === tagData.angebote.length - 1 ? 'checked' : ''; // Standard: "Kein Essen"
+                optionsHTML += `
+                    <label class="meal-item">
+                        <input type="radio"
+                               name="day_${dayIndex}"
+                               value="${angebot.name}"
+                               data-price="${angebot.preis}"
+                               data-day="${tagData.tag}"
+                               ${isChecked}
+                               onchange="calculateTotal()">
+                        <div class="meal-details">
+                            <div class="meal-title">${angebot.name}</div>
+                            <div class="meal-desc">${angebot.desc}</div>
+                        </div>
+                        <div class="meal-price">${angebot.preis.toFixed(2).replace('.', ',')} €</div>
+                    </label>
+                `;
+            });
+
+            dayCard.innerHTML = `
+                <div class="day-header">${tagData.tag} (${tagData.datum})</div>
+                <div class="meal-options">${optionsHTML}</div>
+            `;
+            menuContainer.appendChild(dayCard);
+        });
+    }
+
+    // 4. Gesamtpreis berechnen
+    function calculateTotal() {
+        let total = 0;
+        const selectedRadios = document.querySelectorAll('input[type="radio"]:checked');
+        selectedRadios.forEach(radio => {
+            total += parseFloat(radio.getAttribute('data-price'));
+        });
+        totalPriceEl.textContent = total.toFixed(2).replace('.', ',') + ' €';
+    }
+
+    // 5. Formular absenden (an Google Sheets)
+    orderForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        if (GOOGLE_SCRIPT_URL === "HIER_DEINE_GOOGLE_APPS_SCRIPT_URL_EINFUEGEN") {
+            alert("Bitte verbinde die App erst mit deinem Google Sheet (siehe Anleitung in der Beschreibung).");
+            return;
+        }
+
+        submitBtn.disabled = true;
+        statusMessage.style.color = "blue";
+        statusMessage.textContent = "Bestellung wird gesendet...";
+
+        // Daten sammeln
+        const payload = {
+            name: document.getElementById('userName').value,
+            email: document.getElementById('userEmail').value,
+            gesamtpreis: totalPriceEl.textContent,
+            bestellungen: {}
+        };
+
+        const selectedRadios = document.querySelectorAll('input[type="radio"]:checked');
+        selectedRadios.forEach(radio => {
+            const day = radio.getAttribute('data-day');
+            payload.bestellungen[day] = radio.value;
+        });
+
+        // POST Request an Google Apps Script
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors', // Wichtig für Google Apps Script
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(() => {
+            statusMessage.style.color = "green";
+            statusMessage.textContent = "Vielen Dank! Deine Bestellung wurde erfolgreich übermittelt.";
+            orderForm.reset();
+            calculateTotal();
+            submitBtn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Fehler:', error);
+            statusMessage.style.color = "red";
+            statusMessage.textContent = "Fehler beim Senden der Bestellung. Bitte versuche es erneut.";
+            submitBtn.disabled = false;
+        });
+    });
+
+    // Initialisierung
+    renderMenu();
+    calculateTotal();
+</script>
+
+</body>
+</html>
