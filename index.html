@@ -44,7 +44,7 @@
 
         .user-info {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 15px;
             margin-bottom: 25px;
             padding: 15px;
@@ -63,11 +63,12 @@
             font-size: 0.9em;
         }
 
-        .form-group input {
+        .form-group input, .form-group select {
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 6px;
             font-size: 1em;
+            background: white;
         }
 
         .day-card {
@@ -124,9 +125,50 @@
             color: #777;
         }
 
+        .meal-nutrition {
+            font-size: 0.8em;
+            color: #e67e22;
+            margin-top: 2px;
+            font-weight: 500;
+        }
+
         .meal-price {
             font-weight: bold;
             color: var(--accent);
+        }
+
+        .extras-section {
+            background: #fdfefe;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .extras-section h3 {
+            margin-top: 0;
+            color: var(--primary);
+            font-size: 1.1em;
+        }
+
+        .extras-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+        }
+
+        .extra-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #eee;
+        }
+
+        .extra-item input[type="checkbox"] {
+            transform: scale(1.2);
         }
 
         .summary {
@@ -172,7 +214,7 @@
             font-weight: bold;
         }
 
-        @media (max-width: 600px) {
+        @media (max-width: 768px) {
             .user-info {
                 grid-template-columns: 1fr;
             }
@@ -183,10 +225,10 @@
 
 <div class="container">
     <h1>Mensa Speiseplan</h1>
-    <p class="subtitle">Wähle deine Gerichte für die Woche und bestelle direkt vor.</p>
+    <p class="subtitle">Wähle deine Gerichte für die Woche, Extras und deine Abholzeit.</p>
 
     <form id="orderForm">
-        <!-- Benutzerdaten -->
+        <!-- Benutzerdaten & Abholzeit -->
         <div class="user-info">
             <div class="form-group">
                 <label for="userName">Vollständiger Name *</label>
@@ -196,10 +238,33 @@
                 <label for="userEmail">E-Mail-Adresse *</label>
                 <input type="email" id="userEmail" required placeholder="max@beispiel.de">
             </div>
+            <div class="form-group">
+                <label for="abholzeit">Gewünschte Abholzeit *</label>
+                <select id="abholzeit" required>
+                    <option value="">-- Bitte wählen --</option>
+                    <option value="11:30 Uhr">11:30 Uhr</option>
+                    <option value="11:45 Uhr">11:45 Uhr</option>
+                    <option value="12:00 Uhr">12:00 Uhr</option>
+                    <option value="12:15 Uhr">12:15 Uhr</option>
+                    <option value="12:30 Uhr">12:30 Uhr</option>
+                    <option value="12:45 Uhr">12:45 Uhr</option>
+                    <option value="13:00 Uhr">13:00 Uhr</option>
+                    <option value="13:15 Uhr">13:15 Uhr</option>
+                    <option value="13:30 Uhr">13:30 Uhr</option>
+                    <option value="13:45 Uhr">13:45 Uhr</option>
+                    <option value="14:00 Uhr">14:00 Uhr</option>
+                </select>
+            </div>
         </div>
 
         <!-- Dynamische Tage & Menüs -->
         <div id="menuContainer"></div>
+
+        <!-- Extras (Salate, Desserts, Getränke) -->
+        <div class="extras-section">
+            <h3>🥗 Zusätzliche Extras für die Woche</h3>
+            <div class="extras-grid" id="extrasContainer"></div>
+        </div>
 
         <!-- Zusammenfassung & Senden -->
         <div class="summary">
@@ -214,69 +279,117 @@
 </div>
 
 <script>
-    // 1. Speiseplan-Daten (Hier kannst du den Wochenplan anpassen)
+    // **WICHTIG**: Deine Google Apps Script Web-App URL hier eintragen!
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCFaq_Zriw_ulkfDvFFXA9-qNBFgUJrjGfl2itrSkCRS_Z3DYT0osPlohFzsyh1D1QIg/exec";
+
+    // Funktion zur automatischen Berechnung der Wochentage (Mo-Fr der aktuellen Woche)
+    function getWeekDates() {
+        const today = new Date();
+        const currentDay = today.getDay(); // 0 = Sonntag, 1 = Montag, etc.
+        const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+        
+        const monday = new Date(today);
+        monday.setDate(today.getDate() + distanceToMonday);
+
+        const days = [];
+        const dayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+        const months = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+        for (let i = 0; i < 5; i++) {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            const formattedDate = `${d.getDate()}. ${months[d.getMonth()]}`;
+            days.push({
+                tag: dayNames[i],
+                datum: formattedDate
+            });
+        }
+        return days;
+    }
+
+    const weekDates = getWeekDates();
+
+    // Speiseplan-Daten mit Nährwerten
     const speiseplan = [
         {
             tag: "Montag",
-            datum: "Mo, 12. Okt",
             angebote: [
-                { id: "mo_1", name: "Menü 1: Spaghetti Bolognese", desc: "Rindfleischsaucen-Klassiker mit Hartkäse", preis: 4.50 },
-                { id: "mo_2", name: "Menü 2: Gemüsegulasch (Veggie)", desc: "Mit Kartoffeln und Paprika", preis: 4.00 },
-                { id: "mo_none", name: "Kein Essen", desc: "Ich benötige montags kein Essen", preis: 0.00 }
+                { id: "mo_1", name: "Menü 1: Spaghetti Bolognese", desc: "Rindfleischsauce mit Hartkäse", naehrwerte: "650 kcal | 28g Eiweiß | 75g KH | 22g Fett", preis: 4.50 },
+                { id: "mo_2", name: "Menü 2: Gemüsegulasch (Veggie)", desc: "Mit Kartoffeln und Paprika", naehrwerte: "420 kcal | 12g Eiweiß | 60g KH | 14g Fett", preis: 4.00 },
+                { id: "mo_none", name: "Kein Essen", desc: "Ich benötige montags kein Essen", naehrwerte: "-", preis: 0.00 }
             ]
         },
         {
             tag: "Dienstag",
-            datum: "Di, 13. Okt",
             angebote: [
-                { id: "di_1", name: "Menü 1: Hähnchenbrust im Knuspermantel", desc: "Mit Pommes frites und Beilagensalat", preis: 5.20 },
-                { id: "di_2", name: "Menü 2: Spinat-Linsen-Curry (Vegan)", desc: "Mit Basmatireis", preis: 4.20 },
-                { id: "di_none", name: "Kein Essen", desc: "Ich benötige dienstags kein Essen", preis: 0.00 }
+                { id: "di_1", name: "Menü 1: Hähnchenbrust im Knuspermantel", desc: "Mit Pommes und Salat", naehrwerte: "720 kcal | 45g Eiweiß | 65g KH | 28g Fett", preis: 5.20 },
+                { id: "di_2", name: "Menü 2: Spinat-Linsen-Curry (Vegan)", desc: "Mit Basmatireis", naehrwerte: "480 kcal | 18g Eiweiß | 70g KH | 12g Fett", preis: 4.20 },
+                { id: "di_none", name: "Kein Essen", desc: "Ich benötige dienstags kein Essen", naehrwerte: "-", preis: 0.00 }
             ]
         },
         {
             tag: "Mittwoch",
-            datum: "Mi, 14. Okt",
             angebote: [
-                { id: "mi_1", name: "Menü 1: Schweineschnitzel 'Wiener Art'", desc: "Mit Bratkartoffeln", preis: 5.00 },
-                { id: "mi_2", name: "Menü 2: Käsespätzle mit Röstzwiebeln", desc: "Frischer Beilagensalat", preis: 4.50 },
-                { id: "mi_none", name: "Kein Essen", desc: "Ich benötige mittwochs kein Essen", preis: 0.00 }
+                { id: "mi_1", name: "Menü 1: Schweineschnitzel 'Wiener Art'", desc: "Mit Bratkartoffeln", naehrwerte: "780 kcal | 40g Eiweiß | 70g KH | 35g Fett", preis: 5.00 },
+                { id: "mi_2", name: "Menü 2: Käsespätzle", desc: "Mit Röstzwiebeln und Beilagensalat", naehrwerte: "610 kcal | 22g Eiweiß | 68g KH | 26g Fett", preis: 4.50 },
+                { id: "mi_none", name: "Kein Essen", desc: "Ich benötige mittwochs kein Essen", naehrwerte: "-", preis: 0.00 }
             ]
-        }, { tag: "Donnerstag", datum: "Do, 15. Okt", angebote: [ { id: "do_1", name: "Menü 1: Lasagne al Forno", desc: "Mit Schichten aus Hackfleisch und Béchamel", preis: 5.00 }, { id: "do_2", name: "Menü 2: Falafel-Bowl (Vegan)", desc: "Mit Couscous, Hummus und frischem Gemüse", preis: 4.50 }, { id: "do_none", name: "Kein Essen", desc: "Ich benötige donnerstags kein Essen", preis: 0.00 } ] }, { tag: "Freitag", datum: "Fr, 16. Okt", angebote: [ { id: "fr_1", name: "Menü 1: Knuspriges Fischfilet", desc: "Mit Kartoffelsalat und Remoulade", preis: 5.50 }, { id: "fr_2", name: "Menü 2: Gemüsemaydani / Pilz-Risotto", desc: "Frischer Parmesan und Kräuter", preis: 4.20 }, { id: "fr_none", name: "Kein Essen", desc: "Ich benötige freitags kein Essen", preis: 0.00 } ] }
-
+        },
+        {
+            tag: "Donnerstag",
+            angebote: [
+                { id: "do_1", name: "Menü 1: Lasagne al Forno", desc: "Mit Hackfleisch und Béchamel", naehrwerte: "700 kcal | 32g Eiweiß | 62g KH | 30g Fett", preis: 5.00 },
+                { id: "do_2", name: "Menü 2: Falafel-Bowl (Vegan)", desc: "Mit Couscous, Hummus und Gemüse", naehrwerte: "510 kcal | 16g Eiweiß | 74g KH | 15g Fett", preis: 4.50 },
+                { id: "do_none", name: "Kein Essen", desc: "Ich benötige donnerstags kein Essen", naehrwerte: "-", preis: 0.00 }
+            ]
+        },
+        {
+            tag: "Freitag",
+            angebote: [
+                { id: "fr_1", name: "Menü 1: Knuspriges Fischfilet", desc: "Mit Kartoffelsalat und Remoulade", naehrwerte: "660 kcal | 35g Eiweiß | 58g KH | 29g Fett", preis: 5.50 },
+                { id: "fr_2", name: "Menü 2: Cremiges Pilz-Risotto", desc: "Mit frischem Parmesan und Kräutern", naehrwerte: "530 kcal | 14g Eiweiß | 72g KH | 18g Fett", preis: 4.20 },
+                { id: "fr_none", name: "Kein Essen", desc: "Ich benötige freitags kein Essen", naehrwerte: "-", preis: 0.00 }
+            ]
+        }
     ];
 
-    // **WICHTIG**: Ersetze diese URL mit deiner Google Apps Script Web-App URL!
-    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCFaq_Zriw_ulkfDvFFXA9-qNBFgUJrjGfl2itrSkCRS_Z3DYT0osPlohFzsyh1D1QIg/exec";
+    // Zusätzliche Extras
+    const extrasListe = [
+        { id: "ex_salat", name: "Beilagensalat (frisch)", preis: 1.80 },
+        { id: "ex_dessert", name: "Dessert / Süßspeise", preis: 1.50 },
+        { id: "ex_getraenk", name: "Getränk 0,5l (Wasser / Apfelschorle)", preis: 2.00 }
+    ];
 
-    // 2. DOM-Elemente
     const menuContainer = document.getElementById('menuContainer');
+    const extrasContainer = document.getElementById('extrasContainer');
     const totalPriceEl = document.getElementById('totalPrice');
     const orderForm = document.getElementById('orderForm');
     const submitBtn = document.getElementById('submitBtn');
     const statusMessage = document.getElementById('status-message');
 
-    // 3. Speiseplan rendern
+    // Menü rendern mit automatischen Datumsangaben
     function renderMenu() {
-        speiseplan.forEach((tagData, dayIndex) => {
+        speiseplan.forEach((tagData, index) => {
+            const datumStr = weekDates[index] ? weekDates[index].datum : "";
             const dayCard = document.createElement('div');
             dayCard.className = 'day-card';
 
             let optionsHTML = '';
-            tagData.angebote.forEach((angebot, optionIndex) => {
-                const isChecked = optionIndex === tagData.angebote.length - 1 ? 'checked' : ''; // Standard: "Kein Essen"
+            tagData.angebote.forEach((angebot, optIndex) => {
+                const isChecked = optIndex === tagData.angebote.length - 1 ? 'checked' : '';
                 optionsHTML += `
                     <label class="meal-item">
-                        <input type="radio"
-                               name="day_${dayIndex}"
-                               value="${angebot.name}"
-                               data-price="${angebot.preis}"
+                        <input type="radio" 
+                               name="day_${index}" 
+                               value="${angebot.name}" 
+                               data-price="${angebot.preis}" 
                                data-day="${tagData.tag}"
-                               ${isChecked}
+                               ${isChecked} 
                                onchange="calculateTotal()">
                         <div class="meal-details">
                             <div class="meal-title">${angebot.name}</div>
                             <div class="meal-desc">${angebot.desc}</div>
+                            <div class="meal-nutrition">📊 ${angebot.naehrwerte}</div>
                         </div>
                         <div class="meal-price">${angebot.preis.toFixed(2).replace('.', ',')} €</div>
                     </label>
@@ -284,29 +397,50 @@
             });
 
             dayCard.innerHTML = `
-                <div class="day-header">${tagData.tag} (${tagData.datum})</div>
+                <div class="day-header">${tagData.tag} (${datumStr})</div>
                 <div class="meal-options">${optionsHTML}</div>
             `;
             menuContainer.appendChild(dayCard);
         });
+
+        // Extras rendern
+        extrasListe.forEach(extra => {
+            const div = document.createElement('div');
+            div.className = 'extra-item';
+            div.innerHTML = `
+                <input type="checkbox" name="extra" value="${extra.name}" data-price="${extra.preis}" onchange="calculateTotal()">
+                <div>
+                    <div style="font-weight:600; font-size:0.9em;">${extra.name}</div>
+                    <div style="font-size:0.8em; color:var(--accent);">+${extra.preis.toFixed(2).replace('.', ',')} €</div>
+                </div>
+            `;
+            extrasContainer.appendChild(div);
+        });
     }
 
-    // 4. Gesamtpreis berechnen
+    // Gesamtpreis berechnen
     function calculateTotal() {
         let total = 0;
+        // Hauptgerichte
         const selectedRadios = document.querySelectorAll('input[type="radio"]:checked');
         selectedRadios.forEach(radio => {
             total += parseFloat(radio.getAttribute('data-price'));
         });
+        // Extras
+        const selectedExtras = document.querySelectorAll('input[type="checkbox"]:checked');
+        selectedExtras.forEach(chk => {
+            total += parseFloat(chk.getAttribute('data-price'));
+        });
+
         totalPriceEl.textContent = total.toFixed(2).replace('.', ',') + ' €';
     }
 
-    // 5. Formular absenden (an Google Sheets)
+    // Formular absenden
     orderForm.addEventListener('submit', function(e) {
         e.preventDefault();
 
         if (GOOGLE_SCRIPT_URL === "HIER_DEINE_GOOGLE_APPS_SCRIPT_URL_EINFUEGEN") {
-            alert("Bitte verbinde die App erst mit deinem Google Sheet (siehe Anleitung in der Beschreibung).");
+            alert("Bitte trage zuerst deine Google Apps Script URL im Code ein!");
             return;
         }
 
@@ -314,12 +448,19 @@
         statusMessage.style.color = "blue";
         statusMessage.textContent = "Bestellung wird gesendet...";
 
-        // Daten sammeln
+        // Extras einsammeln
+        let selectedExtrasArr = [];
+        document.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
+            selectedExtrasArr.push(chk.value);
+        });
+
         const payload = {
             name: document.getElementById('userName').value,
             email: document.getElementById('userEmail').value,
+            abholzeit: document.getElementById('abholzeit').value,
             gesamtpreis: totalPriceEl.textContent,
-            bestellungen: {}
+            bestellungen: {},
+            extras: selectedExtrasArr.length > 0 ? selectedExtrasArr.join(', ') : "Keine"
         };
 
         const selectedRadios = document.querySelectorAll('input[type="radio"]:checked');
@@ -328,18 +469,15 @@
             payload.bestellungen[day] = radio.value;
         });
 
-        // POST Request an Google Apps Script
         fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors', // Wichtig für Google Apps Script
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         })
         .then(() => {
             statusMessage.style.color = "green";
-            statusMessage.textContent = "Vielen Dank! Deine Bestellung wurde erfolgreich übermittelt.";
+            statusMessage.textContent = "Vielen Dank! Deine Vorbestellung wurde erfolgreich übermittelt.";
             orderForm.reset();
             calculateTotal();
             submitBtn.disabled = false;
@@ -347,12 +485,11 @@
         .catch(error => {
             console.error('Fehler:', error);
             statusMessage.style.color = "red";
-            statusMessage.textContent = "Fehler beim Senden der Bestellung. Bitte versuche es erneut.";
+            statusMessage.textContent = "Fehler beim Senden. Bitte versuche es erneut.";
             submitBtn.disabled = false;
         });
     });
 
-    // Initialisierung
     renderMenu();
     calculateTotal();
 </script>
