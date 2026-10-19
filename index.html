@@ -44,7 +44,7 @@
 
         .user-info {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 15px;
             margin-bottom: 25px;
             padding: 15px;
@@ -84,6 +84,28 @@
             padding: 12px 20px;
             font-size: 1.1em;
             font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .day-time-select {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+            font-weight: normal;
+        }
+
+        .day-time-select select {
+            padding: 5px 8px;
+            border-radius: 4px;
+            border: none;
+            font-size: 0.95em;
+            background: white;
+            color: #333;
         }
 
         .meal-options {
@@ -214,9 +236,13 @@
             font-weight: bold;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 600px) {
             .user-info {
                 grid-template-columns: 1fr;
+            }
+            .day-header {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
     </style>
@@ -225,10 +251,10 @@
 
 <div class="container">
     <h1>Mensa Speiseplan</h1>
-    <p class="subtitle">Wähle deine Gerichte für die Woche, Extras und deine Abholzeit.</p>
+    <p class="subtitle">Wähle deine Gerichte, individuelle Abholzeiten pro Tag und Extras.</p>
 
     <form id="orderForm">
-        <!-- Benutzerdaten & Abholzeit -->
+        <!-- Benutzerdaten -->
         <div class="user-info">
             <div class="form-group">
                 <label for="userName">Vollständiger Name *</label>
@@ -238,35 +264,18 @@
                 <label for="userEmail">E-Mail-Adresse *</label>
                 <input type="email" id="userEmail" required placeholder="max@beispiel.de">
             </div>
-            <div class="form-group">
-                <label for="abholzeit">Gewünschte Abholzeit *</label>
-                <select id="abholzeit" required>
-                    <option value="">-- Bitte wählen --</option>
-                    <option value="11:30 Uhr">11:30 Uhr</option>
-                    <option value="11:45 Uhr">11:45 Uhr</option>
-                    <option value="12:00 Uhr">12:00 Uhr</option>
-                    <option value="12:15 Uhr">12:15 Uhr</option>
-                    <option value="12:30 Uhr">12:30 Uhr</option>
-                    <option value="12:45 Uhr">12:45 Uhr</option>
-                    <option value="13:00 Uhr">13:00 Uhr</option>
-                    <option value="13:15 Uhr">13:15 Uhr</option>
-                    <option value="13:30 Uhr">13:30 Uhr</option>
-                    <option value="13:45 Uhr">13:45 Uhr</option>
-                    <option value="14:00 Uhr">14:00 Uhr</option>
-                </select>
-            </div>
         </div>
 
         <!-- Dynamische Tage & Menüs -->
         <div id="menuContainer"></div>
 
-        <!-- Extras (Salate, Desserts, Getränke) -->
+        <!-- Extras -->
         <div class="extras-section">
             <h3>🥗 Zusätzliche Extras für die Woche</h3>
             <div class="extras-grid" id="extrasContainer"></div>
         </div>
 
-        <!-- Zusammenfassung & Senden -->
+        <!-- Zusammenfassung -->
         <div class="summary">
             <div>
                 <span>Gesamtpreis: </span>
@@ -279,13 +288,16 @@
 </div>
 
 <script>
-    // **WICHTIG**: Deine Google Apps Script Web-App URL hier eintragen!
+    // **WICHTIG**: Google Apps Script Web-App URL hier eintragen!
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCFaq_Zriw_ulkfDvFFXA9-qNBFgUJrjGfl2itrSkCRS_Z3DYT0osPlohFzsyh1D1QIg/exec";
 
-    // Funktion zur automatischen Berechnung der Wochentage (Mo-Fr der aktuellen Woche)
+    // Zeiten-Optionen für die Abholung
+    const abholZeitenOptions = ["11:30 Uhr", "11:45 Uhr", "12:00 Uhr", "12:15 Uhr", "12:30 Uhr", "12:45 Uhr", "13:00 Uhr", "13:15 Uhr", "13:30 Uhr", "13:45 Uhr", "14:00 Uhr"];
+
+    // Automatisches Datum (Aktuelle Woche)
     function getWeekDates() {
         const today = new Date();
-        const currentDay = today.getDay(); // 0 = Sonntag, 1 = Montag, etc.
+        const currentDay = today.getDay();
         const distanceToMonday = currentDay === 0 ? -6 : 1 - currentDay;
         
         const monday = new Date(today);
@@ -298,10 +310,9 @@
         for (let i = 0; i < 5; i++) {
             const d = new Date(monday);
             d.setDate(monday.getDate() + i);
-            const formattedDate = `${d.getDate()}. ${months[d.getMonth()]}`;
             days.push({
                 tag: dayNames[i],
-                datum: formattedDate
+                datum: `${d.getDate()}. ${months[d.getMonth()]}`
             });
         }
         return days;
@@ -309,7 +320,6 @@
 
     const weekDates = getWeekDates();
 
-    // Speiseplan-Daten mit Nährwerten
     const speiseplan = [
         {
             tag: "Montag",
@@ -353,7 +363,6 @@
         }
     ];
 
-    // Zusätzliche Extras
     const extrasListe = [
         { id: "ex_salat", name: "Beilagensalat (frisch)", preis: 1.80 },
         { id: "ex_dessert", name: "Dessert / Süßspeise", preis: 1.50 },
@@ -367,12 +376,17 @@
     const submitBtn = document.getElementById('submitBtn');
     const statusMessage = document.getElementById('status-message');
 
-    // Menü rendern mit automatischen Datumsangaben
     function renderMenu() {
-        speiseplan.forEach((tagData, index) => {
-            const datumStr = weekDates[index] ? weekDates[index].datum : "";
+        speiseplan.forEach((tagData, dayIndex) => {
+            const datumStr = weekDates[dayIndex] ? weekDates[dayIndex].datum : "";
             const dayCard = document.createElement('div');
             dayCard.className = 'day-card';
+
+            // Abholzeiten-Dropdown generieren
+            let timeOptionsHTML = `<option value="Keine Abholung">Keine Abholung</option>`;
+            abholZeitenOptions.forEach(zeit => {
+                timeOptionsHTML += `<option value="${zeit}">${zeit}</option>`;
+            });
 
             let optionsHTML = '';
             tagData.angebote.forEach((angebot, optIndex) => {
@@ -380,12 +394,13 @@
                 optionsHTML += `
                     <label class="meal-item">
                         <input type="radio" 
-                               name="day_${index}" 
+                               name="day_${dayIndex}" 
                                value="${angebot.name}" 
                                data-price="${angebot.preis}" 
                                data-day="${tagData.tag}"
+                               data-dayindex="${dayIndex}"
                                ${isChecked} 
-                               onchange="calculateTotal()">
+                               onchange="handleMealChange(${dayIndex}, '${angebot.name}')">
                         <div class="meal-details">
                             <div class="meal-title">${angebot.name}</div>
                             <div class="meal-desc">${angebot.desc}</div>
@@ -397,7 +412,15 @@
             });
 
             dayCard.innerHTML = `
-                <div class="day-header">${tagData.tag} (${datumStr})</div>
+                <div class="day-header">
+                    <span>${tagData.tag} (${datumStr})</span>
+                    <div class="day-time-select">
+                        <label for="time_${dayIndex}">🕒 Abholzeit:</label>
+                        <select id="time_${dayIndex}" data-day="${tagData.tag}">
+                            ${timeOptionsHTML}
+                        </select>
+                    </div>
+                </div>
                 <div class="meal-options">${optionsHTML}</div>
             `;
             menuContainer.appendChild(dayCard);
@@ -418,29 +441,33 @@
         });
     }
 
-    // Gesamtpreis berechnen
+    // Wenn "Kein Essen" gewählt wird, Zeit auf "Keine Abholung" setzen, sonst Standard 12:00
+    function handleMealChange(dayIndex, mealName) {
+        const timeSelect = document.getElementById(`time_${dayIndex}`);
+        if (mealName === "Kein Essen") {
+            timeSelect.value = "Keine Abholung";
+        } else if (timeSelect.value === "Keine Abholung") {
+            timeSelect.value = "12:00 Uhr";
+        }
+        calculateTotal();
+    }
+
     function calculateTotal() {
         let total = 0;
-        // Hauptgerichte
-        const selectedRadios = document.querySelectorAll('input[type="radio"]:checked');
-        selectedRadios.forEach(radio => {
+        document.querySelectorAll('input[type="radio"]:checked').forEach(radio => {
             total += parseFloat(radio.getAttribute('data-price'));
         });
-        // Extras
-        const selectedExtras = document.querySelectorAll('input[type="checkbox"]:checked');
-        selectedExtras.forEach(chk => {
+        document.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
             total += parseFloat(chk.getAttribute('data-price'));
         });
-
         totalPriceEl.textContent = total.toFixed(2).replace('.', ',') + ' €';
     }
 
-    // Formular absenden
     orderForm.addEventListener('submit', function(e) {
         e.preventDefault();
 
         if (GOOGLE_SCRIPT_URL === "HIER_DEINE_GOOGLE_APPS_SCRIPT_URL_EINFUEGEN") {
-            alert("Bitte trage zuerst deine Google Apps Script URL im Code ein!");
+            alert("Bitte trage deine Google Apps Script URL im Code ein!");
             return;
         }
 
@@ -448,7 +475,6 @@
         statusMessage.style.color = "blue";
         statusMessage.textContent = "Bestellung wird gesendet...";
 
-        // Extras einsammeln
         let selectedExtrasArr = [];
         document.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
             selectedExtrasArr.push(chk.value);
@@ -457,16 +483,21 @@
         const payload = {
             name: document.getElementById('userName').value,
             email: document.getElementById('userEmail').value,
-            abholzeit: document.getElementById('abholzeit').value,
             gesamtpreis: totalPriceEl.textContent,
             bestellungen: {},
             extras: selectedExtrasArr.length > 0 ? selectedExtrasArr.join(', ') : "Keine"
         };
 
-        const selectedRadios = document.querySelectorAll('input[type="radio"]:checked');
-        selectedRadios.forEach(radio => {
+        // Essen + Zeit pro Tag einsammeln
+        document.querySelectorAll('input[type="radio"]:checked').forEach(radio => {
             const day = radio.getAttribute('data-day');
-            payload.bestellungen[day] = radio.value;
+            const dayIndex = radio.getAttribute('data-dayindex');
+            const timeSelect = document.getElementById(`time_${dayIndex}`);
+            
+            payload.bestellungen[day] = {
+                essen: radio.value,
+                zeit: timeSelect ? timeSelect.value : "Keine Abholung"
+            };
         });
 
         fetch(GOOGLE_SCRIPT_URL, {
